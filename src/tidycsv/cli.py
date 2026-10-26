@@ -5,7 +5,8 @@ import sys
 from typing import Any
 
 from tidycsv import __version__
-from tidycsv.io import CsvLoadError, load_csv
+from tidycsv.clean import drop_duplicates
+from tidycsv.io import CsvLoadError, CsvWriteError, load_csv, save_csv
 from tidycsv.summary import summarize
 
 # Exit code for errors such as an unreadable file (argparse also uses 2).
@@ -26,6 +27,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     summary_parser.add_argument("path", help="CSV file to read.")
     summary_parser.set_defaults(func=run_summary)
+
+    clean_parser = subparsers.add_parser("clean", help="Write a cleaned copy of a CSV file.")
+    clean_parser.add_argument("path", help="CSV file to read.")
+    clean_parser.add_argument("-o", "--output", required=True, help="Where to write the result.")
+    clean_parser.add_argument(
+        "--drop-duplicates", action="store_true", help="Remove fully duplicated rows."
+    )
+    clean_parser.set_defaults(func=run_clean)
     return parser
 
 
@@ -33,6 +42,23 @@ def run_summary(args: argparse.Namespace) -> int:
     """Handle `tidycsv summary`."""
     df = load_csv(args.path)
     print(format_summary(summarize(df)))
+    return 0
+
+
+def run_clean(args: argparse.Namespace) -> int:
+    """Handle `tidycsv clean`: apply the chosen steps, then save."""
+    if not args.drop_duplicates:
+        print("Error: nothing to do. Pass --drop-duplicates.", file=sys.stderr)
+        return EXIT_ERROR
+
+    df = load_csv(args.path)
+    if args.drop_duplicates:
+        rows_before = len(df)
+        df = drop_duplicates(df)
+        print(f"Removed {rows_before - len(df)} duplicate row(s).")
+
+    save_csv(df, args.output)
+    print(f"Wrote {len(df)} row(s) to {args.output}")
     return 0
 
 
@@ -69,6 +95,6 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
-    except CsvLoadError as error:
+    except (CsvLoadError, CsvWriteError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return EXIT_ERROR

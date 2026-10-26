@@ -1,8 +1,9 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
-from tidycsv.io import CsvLoadError, load_csv
+from tidycsv.io import CsvLoadError, CsvWriteError, load_csv, save_csv
 
 
 def test_load_valid_csv(tmp_path: Path) -> None:
@@ -57,3 +58,18 @@ def test_malformed_csv_raises(tmp_path: Path) -> None:
 
     with pytest.raises(CsvLoadError, match="Could not parse"):
         load_csv(path)
+
+
+def test_save_then_load_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "out.csv"
+    df = pd.DataFrame({"name": ["Ana", "Ben"], "age": [30, 25]})
+
+    save_csv(df, path)
+
+    assert path.read_text(encoding="utf-8").splitlines()[0] == "name,age"
+    pd.testing.assert_frame_equal(load_csv(path), df)
+
+
+def test_save_to_missing_folder_raises(tmp_path: Path) -> None:
+    with pytest.raises(CsvWriteError, match="Could not write"):
+        save_csv(pd.DataFrame({"x": [1]}), tmp_path / "no_such_dir" / "out.csv")

@@ -33,3 +33,36 @@ def test_no_command_is_usage_error() -> None:
         main([])
 
     assert info.value.code == 2
+
+
+def test_clean_drops_duplicates_and_writes_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "in.csv"
+    target = tmp_path / "out.csv"
+    source.write_text("name,age\nAna,30\nBen,25\nAna,30\n", encoding="utf-8")
+
+    exit_code = main(["clean", str(source), "--drop-duplicates", "-o", str(target)])
+
+    assert exit_code == 0
+    assert "Removed 1 duplicate row(s)." in capsys.readouterr().out
+    assert target.read_text(encoding="utf-8").splitlines() == ["name,age", "Ana,30", "Ben,25"]
+
+
+def test_clean_without_steps_is_an_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    target = tmp_path / "out.csv"
+
+    exit_code = main(["clean", "in.csv", "-o", str(target)])
+
+    assert exit_code == 2
+    assert "nothing to do" in capsys.readouterr().err
+    assert not target.exists()
+
+
+def test_clean_requires_output() -> None:
+    with pytest.raises(SystemExit) as info:
+        main(["clean", "in.csv", "--drop-duplicates"])
+
+    assert info.value.code == 2
