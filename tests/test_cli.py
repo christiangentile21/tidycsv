@@ -129,3 +129,18 @@ def test_check_reports_issues_and_exits_one(
 
 def test_check_unreadable_file_exits_two(tmp_path: Path) -> None:
     assert main(["check", str(tmp_path / "nope.csv")]) == 2
+
+
+def test_clean_fill_drop_reports_all_missing_column(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "in.csv"
+    target = tmp_path / "out.csv"
+    source.write_text("name,age,notes\nAna,30,\nBen,,\n", encoding="utf-8")
+
+    main(["clean", str(source), "--fill-missing", "drop", "-o", str(target)])
+
+    output = capsys.readouterr().out
+    assert "Dropped all-missing column(s): notes" in output
+    assert "Dropped 1 row(s) with missing values." in output
+    assert target.read_text(encoding="utf-8").splitlines() == ["name,age", "Ana,30.0"]

@@ -3,7 +3,7 @@ import math
 import pandas as pd
 import pytest
 
-from tidycsv.clean import drop_duplicates, fill_missing
+from tidycsv.clean import all_missing_columns, drop_duplicates, fill_missing
 
 
 def test_drop_duplicates_keeps_first_occurrence() -> None:
@@ -93,10 +93,37 @@ def test_all_missing_column_is_left_unchanged() -> None:
         assert result["empty"].isna().all()
 
 
-def test_all_missing_column_with_drop_removes_every_row() -> None:
-    df = pd.DataFrame({"x": [1.0, 2.0], "empty": [None, None]})
+def test_drop_removes_all_missing_column_and_keeps_rows() -> None:
+    df = pd.DataFrame({"x": [1.0, 2.0, None], "empty": [None, None, None]})
 
-    assert fill_missing(df, "drop").empty
+    result = fill_missing(df, "drop")
+
+    expected = pd.DataFrame({"x": [1.0, 2.0]})
+    pd.testing.assert_frame_equal(result, expected)
+
+
+def test_drop_on_header_only_frame_keeps_columns() -> None:
+    df = pd.DataFrame(columns=["a", "b"])
+
+    result = fill_missing(df, "drop")
+
+    assert list(result.columns) == ["a", "b"]
+    assert result.empty
+
+
+def test_drop_when_every_column_is_missing_keeps_header_only() -> None:
+    df = pd.DataFrame({"a": [None, None], "b": [None, None]})
+
+    result = fill_missing(df, "drop")
+
+    assert list(result.columns) == ["a", "b"]
+    assert result.empty
+
+
+def test_all_missing_columns_lists_only_fully_missing() -> None:
+    df = pd.DataFrame({"some": [1.0, None], "none": [None, None]})
+
+    assert all_missing_columns(df) == ["none"]
 
 
 def test_fill_does_not_modify_input() -> None:

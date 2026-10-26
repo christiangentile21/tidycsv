@@ -43,7 +43,7 @@ fill values.
 | `mean` | Fills numeric columns with the column mean. Other columns are left as is. |
 | `median` | Same, using the median. |
 | `mode` | Fills every column (numeric or text) with its most common value. |
-| `drop` | Removes every row that has a missing value. |
+| `drop` | Removes columns that are entirely missing, then every row that still has a missing value. |
 
 ### Exit codes
 
@@ -112,8 +112,9 @@ Tests use tiny synthetic CSVs written to pytest's temporary folders.
   count as different values.
 - `mean` and `median` skip non-numeric columns. Numbers stored as text
   (for example `"1,000"`) count as text.
-- A column that is entirely missing can't be filled, so it is left unchanged
-  (or, with `drop`, every row is removed). `clean` lists these columns.
+- With `mean`, `median`, or `mode`, a column that is entirely missing can't
+  be filled, so it is left unchanged and `clean` lists it. With `drop`, the
+  column is removed instead (and reported), so it can't wipe out every row.
 - When `mode` finds a tie, the smallest value is used.
 - Text column types show as `str` with pandas 3 and `object` with pandas 2.
 

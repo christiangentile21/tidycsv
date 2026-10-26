@@ -41,7 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     clean_parser.add_argument(
         "--fill-missing",
         choices=FILL_STRATEGIES,
-        help="Fill missing values (mean/median: numeric columns only) or drop those rows.",
+        help="Fill missing values (mean/median: numeric columns only), or drop "
+        "all-missing columns and then incomplete rows.",
     )
     clean_parser.set_defaults(func=run_clean)
 
@@ -85,10 +86,14 @@ def run_clean(args: argparse.Namespace) -> int:
 def run_fill_step(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
     """Apply fill_missing() and print what it changed."""
     rows_before = len(df)
+    columns_before = list(df.columns)
     missing_before = int(df.isna().sum().sum())
     df = fill_missing(df, strategy)
 
     if strategy == "drop":
+        dropped_columns = [column for column in columns_before if column not in df.columns]
+        if dropped_columns:
+            print(f"Dropped all-missing column(s): {', '.join(dropped_columns)}")
         print(f"Dropped {rows_before - len(df)} row(s) with missing values.")
     else:
         filled = missing_before - int(df.isna().sum().sum())

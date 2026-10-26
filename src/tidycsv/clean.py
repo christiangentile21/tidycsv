@@ -22,14 +22,37 @@ def fill_missing(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
 
     - "mean" / "median": fill numeric columns only; others are left as is.
     - "mode": fill every column with its most common value.
-    - "drop": remove any row that has a missing value.
+    - "drop": see drop_missing().
 
-    A column that is entirely missing has no value to fill with, so it
-    is left unchanged.
+    For mean/median/mode, a column that is entirely missing has no value
+    to fill with, so it is left unchanged.
     """
     if strategy == "drop":
-        return df.dropna().reset_index(drop=True)
+        return drop_missing(df)
     return df.fillna(fill_values(df, strategy))
+
+
+def drop_missing(df: pd.DataFrame) -> pd.DataFrame:
+    """Return a copy with no missing values, removing as little as possible.
+
+    1. Remove rows with no data at all.
+    2. Remove columns that are entirely missing (otherwise they would
+       force every row to be dropped).
+    3. Remove any row that still has a missing value.
+    """
+    df = df.dropna(how="all")
+    df = df.drop(columns=all_missing_columns(df))
+    return df.dropna().reset_index(drop=True)
+
+
+def all_missing_columns(df: pd.DataFrame) -> list[str]:
+    """Return the columns where every value is missing.
+
+    A frame with no rows returns [] so a header-only file keeps its columns.
+    """
+    if df.empty:
+        return []
+    return [column for column in df.columns if df[column].isna().all()]
 
 
 def fill_values(df: pd.DataFrame, strategy: str) -> dict[str, Any]:
