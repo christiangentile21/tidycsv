@@ -1,8 +1,9 @@
+import argparse
 from pathlib import Path
 
 import pytest
 
-from tidycsv.cli import main
+from tidycsv.cli import main, parse_delimiter
 
 
 def test_summary_prints_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -237,3 +238,53 @@ def test_clean_fill_mode_via_cli_fills_text(
     assert "Filled 1 missing value(s) using mode." in output
     assert "Not filled" not in output
     assert target.read_text(encoding="utf-8").splitlines()[3] == "3,Rome"
+
+
+@pytest.mark.parametrize(("value", "expected"), [(";", ";"), ("|", "|"), ("tab", "\t"), ("\t", "\t")])
+def test_parse_delimiter_accepts(value: str, expected: str) -> None:
+    assert parse_delimiter(value) == expected
+
+
+@pytest.mark.parametrize("value", ["", ";;", '"', "\n"])
+def test_parse_delimiter_rejects(value: str) -> None:
+    with pytest.raises(argparse.ArgumentTypeError):
+        parse_delimiter(value)
+
+
+def test_invalid_delimiter_is_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as info:
+        main(["summary", "in.csv", "--delimiter", ";;"])
+
+    assert info.value.code == 2
+    assert "single character" in capsys.readouterr().err
+
+
+def test_summary_with_semicolon_delimiter(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "semi.csv"
+    path.write_text("name;age\nAna;30\nBen;25\n", encoding="utf-8")
+
+    main(["summary", str(path), "--delimiter", ";"])
+
+    assert "Columns: 2" in capsys.readouterr().out
+
+
+def test_check_with_tab_delimiter(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "dupes.tsv"
+    path.write_text("name\tage\nAna\t30\nAna\t30\n", encoding="utf-8")
+
+    exit_code = main(["check", str(path), "--delimiter", "tab"])
+
+    assert exit_code == 1
+    assert "1 duplicate row(s)" in capsys.readouterr().out
+
+
+def test_clean_keeps_input_delimiter(tmp_path: Path) -> None:
+    source = tmp_path / "in.csv"
+    target = tmp_path / "out.csv"
+    source.write_text("name;age\nAna;30\nAna;30\n", encoding="utf-8")
+
+    main(["clean", str(source), "--delimiter", ";", "--drop-duplicates", "-o", str(target)])
+
+    assert target.read_text(encoding="utf-8").splitlines() == ["name;age", "Ana;30"]

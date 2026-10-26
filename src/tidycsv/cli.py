@@ -29,11 +29,11 @@ def build_parser() -> argparse.ArgumentParser:
     summary_parser = subparsers.add_parser(
         "summary", help="Show rows, columns, types, missing values, and numeric stats."
     )
-    summary_parser.add_argument("path", help="CSV file to read.")
+    add_input_arguments(summary_parser)
     summary_parser.set_defaults(func=run_summary)
 
     clean_parser = subparsers.add_parser("clean", help="Write a cleaned copy of a CSV file.")
-    clean_parser.add_argument("path", help="CSV file to read.")
+    add_input_arguments(clean_parser)
     clean_parser.add_argument("-o", "--output", required=True, help="Where to write the result.")
     clean_parser.add_argument(
         "--drop-duplicates", action="store_true", help="Remove fully duplicated rows."
@@ -49,14 +49,36 @@ def build_parser() -> argparse.ArgumentParser:
     check_parser = subparsers.add_parser(
         "check", help="Exit with code 1 if duplicates or missing values are found."
     )
-    check_parser.add_argument("path", help="CSV file to read.")
+    add_input_arguments(check_parser)
     check_parser.set_defaults(func=run_check)
     return parser
 
 
+def add_input_arguments(subparser: argparse.ArgumentParser) -> None:
+    """Add the arguments every command shares: the file and its delimiter."""
+    subparser.add_argument("path", help="CSV file to read.")
+    subparser.add_argument(
+        "--delimiter",
+        type=parse_delimiter,
+        default=",",
+        help='Column separator, one character (default ","). Use "tab" or "\\t" for tabs.',
+    )
+
+
+def parse_delimiter(value: str) -> str:
+    """Validate --delimiter: one character, with "tab" and "\\t" meaning a tab."""
+    if value in ("tab", "\\t"):
+        return "\t"
+    if len(value) != 1:
+        raise argparse.ArgumentTypeError(f"must be a single character, got {value!r}")
+    if value in ('"', "\n", "\r"):
+        raise argparse.ArgumentTypeError(f"{value!r} can't be used as a delimiter")
+    return value
+
+
 def run_summary(args: argparse.Namespace) -> int:
     """Handle `tidycsv summary`."""
-    df = load_csv(args.path)
+    df = load_csv(args.path, args.delimiter)
     print(format_summary(summarize(df)))
     return 0
 
@@ -65,12 +87,13 @@ def run_clean(args: argparse.Namespace) -> int:
     """Handle `tidycsv clean`: apply the chosen steps, then save.
 
     Duplicates are removed first so they don't skew the mean/median/mode.
+    The output uses the same delimiter as the input.
     """
     if not (args.drop_duplicates or args.fill_missing):
         print("Error: nothing to do. Pass --drop-duplicates and/or --fill-missing.", file=sys.stderr)
         return EXIT_ERROR
 
-    df = load_csv(args.path)
+    df = load_csv(args.path, args.delimiter)
     if args.drop_duplicates:
         rows_before = len(df)
         df = drop_duplicates(df)
@@ -78,7 +101,7 @@ def run_clean(args: argparse.Namespace) -> int:
     if args.fill_missing:
         df = run_fill_step(df, args.fill_missing)
 
-    save_csv(df, args.output)
+    save_csv(df, args.output, args.delimiter)
     print(f"Wrote {len(df)} row(s) to {args.output}")
     return 0
 
@@ -108,7 +131,7 @@ def run_fill_step(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
 
 def run_check(args: argparse.Namespace) -> int:
     """Handle `tidycsv check`: print a short report, return 0 or EXIT_ISSUES."""
-    issues = find_issues(load_csv(args.path))
+    issues = find_issues(load_csv(args.path, args.delimiter))
     if not has_issues(issues):
         print("No issues found.")
         return 0

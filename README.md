@@ -29,10 +29,14 @@ which is useful if your system blocks newly created executables.
 ## Usage
 
 ```
-tidycsv summary FILE
-tidycsv clean FILE -o OUTPUT [--drop-duplicates] [--fill-missing {mean,median,mode,drop}]
-tidycsv check FILE
+tidycsv summary FILE [--delimiter CHAR]
+tidycsv clean FILE -o OUTPUT [--delimiter CHAR] [--drop-duplicates] [--fill-missing {mean,median,mode,drop}]
+tidycsv check FILE [--delimiter CHAR]
 ```
+
+`--delimiter` sets the column separator (default `,`). It must be a single
+character, such as `;` or `|`; use `tab` (or `\t`) for tab-separated files.
+`clean` writes its output with the same delimiter as the input.
 
 `clean` needs at least one of `--drop-duplicates` or `--fill-missing`.
 When both are given, duplicates are removed first so they don't skew the
@@ -103,7 +107,11 @@ Tests use tiny synthetic CSVs written to pytest's temporary folders.
 
 ## Limitations
 
-- Only comma-separated, UTF-8 files are supported.
+- Only UTF-8 files are supported, and the delimiter must be one character.
+  It isn't detected automatically: with the wrong `--delimiter`, each line
+  loads as a single column.
+- In a file with only one column, an empty value looks like a blank line,
+  and blank lines are skipped. Such a value is not counted as missing.
 - The whole file is loaded into memory, so very large files may be slow.
 - An integer column with missing values is read as floats, because pandas
   stores missing numbers as NaN (a float). After cleaning, `30` is written
@@ -120,10 +128,9 @@ Tests use tiny synthetic CSVs written to pytest's temporary folders.
 
 ## Roadmap
 
-1. `--delimiter` option for semicolon- and tab-separated files.
-2. Outlier flagging in `summary` and `check` using the IQR rule.
-3. Column renaming in `clean` (for example `--rename old=new`).
-4. `--json` output for `summary` and `check`, so other tools can read the
+1. Outlier flagging in `summary` and `check` using the IQR rule.
+2. Column renaming in `clean` (for example `--rename old=new`).
+3. `--json` output for `summary` and `check`, so other tools can read the
    results.
 
 ## License
