@@ -1,5 +1,7 @@
 # tidycsv
 
+[![CI](https://github.com/christiangentile21/tidycsv/actions/workflows/ci.yml/badge.svg)](https://github.com/christiangentile21/tidycsv/actions/workflows/ci.yml)
+
 A small command-line tool to inspect, clean, and summarize CSV files.
 Built with Python, pandas, and argparse.
 
