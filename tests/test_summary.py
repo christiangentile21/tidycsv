@@ -2,7 +2,7 @@ import math
 
 import pandas as pd
 
-from tidycsv.summary import summarize
+from tidycsv.summary import find_issues, has_issues, summarize
 
 
 def test_summarize_counts_and_stats() -> None:
@@ -47,3 +47,31 @@ def test_empty_frame_keeps_columns() -> None:
     assert result["rows"] == 0
     assert result["columns"] == 2
     assert result["missing"] == {"a": 0, "b": 0}
+
+
+def test_find_issues_reports_duplicates_and_missing() -> None:
+    df = pd.DataFrame({"name": ["Ana", "Ana", "Ben"], "age": [30, 30, None]})
+
+    issues = find_issues(df)
+
+    assert issues == {"duplicate_rows": 1, "missing": {"age": 1}}
+    assert has_issues(issues)
+
+
+def test_clean_frame_has_no_issues() -> None:
+    df = pd.DataFrame({"name": ["Ana", "Ben"], "age": [30, 25]})
+
+    issues = find_issues(df)
+
+    assert issues == {"duplicate_rows": 0, "missing": {}}
+    assert not has_issues(issues)
+
+
+def test_empty_frame_has_no_issues() -> None:
+    assert not has_issues(find_issues(pd.DataFrame(columns=["a", "b"])))
+
+
+def test_rows_of_only_missing_values_count_as_duplicates() -> None:
+    df = pd.DataFrame({"a": [None, None]})
+
+    assert find_issues(df) == {"duplicate_rows": 1, "missing": {"a": 2}}

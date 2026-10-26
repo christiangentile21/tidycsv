@@ -101,3 +101,31 @@ def test_clean_rejects_unknown_strategy() -> None:
         main(["clean", "in.csv", "--fill-missing", "average", "-o", "out.csv"])
 
     assert info.value.code == 2
+
+
+def test_check_clean_file_exits_zero(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "good.csv"
+    path.write_text("name,age\nAna,30\nBen,25\n", encoding="utf-8")
+
+    exit_code = main(["check", str(path)])
+
+    assert exit_code == 0
+    assert "No issues found." in capsys.readouterr().out
+
+
+def test_check_reports_issues_and_exits_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "bad.csv"
+    path.write_text("name,age\nAna,30\nAna,30\nBen,\n", encoding="utf-8")
+
+    exit_code = main(["check", str(path)])
+
+    output = capsys.readouterr().out
+    assert exit_code == 1
+    assert "1 duplicate row(s)" in output
+    assert "age (1)" in output
+
+
+def test_check_unreadable_file_exits_two(tmp_path: Path) -> None:
+    assert main(["check", str(tmp_path / "nope.csv")]) == 2

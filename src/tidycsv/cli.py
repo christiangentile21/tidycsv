@@ -9,8 +9,10 @@ import pandas as pd
 from tidycsv import __version__
 from tidycsv.clean import FILL_STRATEGIES, drop_duplicates, fill_missing
 from tidycsv.io import CsvLoadError, CsvWriteError, load_csv, save_csv
-from tidycsv.summary import summarize
+from tidycsv.summary import find_issues, has_issues, summarize
 
+# Exit code when `check` finds quality issues.
+EXIT_ISSUES = 1
 # Exit code for errors such as an unreadable file (argparse also uses 2).
 EXIT_ERROR = 2
 
@@ -42,6 +44,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fill missing values (mean/median: numeric columns only) or drop those rows.",
     )
     clean_parser.set_defaults(func=run_clean)
+
+    check_parser = subparsers.add_parser(
+        "check", help="Exit with code 1 if duplicates or missing values are found."
+    )
+    check_parser.add_argument("path", help="CSV file to read.")
+    check_parser.set_defaults(func=run_check)
     return parser
 
 
@@ -92,6 +100,22 @@ def run_fill_step(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
         listing = ", ".join(f"{column} ({count})" for column, count in still_missing.items())
         print(f"Not filled (non-numeric or all missing): {listing}")
     return df
+
+
+def run_check(args: argparse.Namespace) -> int:
+    """Handle `tidycsv check`: print a short report, return 0 or EXIT_ISSUES."""
+    issues = find_issues(load_csv(args.path))
+    if not has_issues(issues):
+        print("No issues found.")
+        return 0
+
+    print("Issues found:")
+    if issues["duplicate_rows"]:
+        print(f"  - {issues['duplicate_rows']} duplicate row(s)")
+    if issues["missing"]:
+        listing = ", ".join(f"{column} ({count})" for column, count in issues["missing"].items())
+        print(f"  - missing values in: {listing}")
+    return EXIT_ISSUES
 
 
 def format_summary(summary: dict[str, Any]) -> str:
