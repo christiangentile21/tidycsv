@@ -66,3 +66,38 @@ def test_clean_requires_output() -> None:
         main(["clean", "in.csv", "--drop-duplicates"])
 
     assert info.value.code == 2
+
+
+def test_clean_fill_median_reports_unfilled_columns(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "in.csv"
+    target = tmp_path / "out.csv"
+    source.write_text("city,score\nRome,1\nOslo,\n,9\n", encoding="utf-8")
+
+    exit_code = main(["clean", str(source), "--fill-missing", "median", "-o", str(target)])
+
+    output = capsys.readouterr().out
+    assert exit_code == 0
+    assert "Filled 1 missing value(s) using median." in output
+    assert "Not filled (non-numeric or all missing): city (1)" in output
+    assert target.read_text(encoding="utf-8").splitlines()[2] == "Oslo,5.0"
+
+
+def test_clean_fill_drop_reports_dropped_rows(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    source = tmp_path / "in.csv"
+    target = tmp_path / "out.csv"
+    source.write_text("a,b\n1,2\n3,\n", encoding="utf-8")
+
+    main(["clean", str(source), "--fill-missing", "drop", "-o", str(target)])
+
+    assert "Dropped 1 row(s) with missing values." in capsys.readouterr().out
+
+
+def test_clean_rejects_unknown_strategy() -> None:
+    with pytest.raises(SystemExit) as info:
+        main(["clean", "in.csv", "--fill-missing", "average", "-o", "out.csv"])
+
+    assert info.value.code == 2

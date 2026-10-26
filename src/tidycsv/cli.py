@@ -4,8 +4,10 @@ import argparse
 import sys
 from typing import Any
 
+import pandas as pd
+
 from tidycsv import __version__
-from tidycsv.clean import drop_duplicates
+from tidycsv.clean import FILL_STRATEGIES, drop_duplicates, fill_missing
 from tidycsv.io import CsvLoadError, CsvWriteError, load_csv, save_csv
 from tidycsv.summary import summarize
 
@@ -34,6 +36,11 @@ def build_parser() -> argparse.ArgumentParser:
     clean_parser.add_argument(
         "--drop-duplicates", action="store_true", help="Remove fully duplicated rows."
     )
+    clean_parser.add_argument(
+        "--fill-missing",
+        choices=FILL_STRATEGIES,
+        help="Fill missing values (mean/median: numeric columns only) or drop those rows.",
+    )
     clean_parser.set_defaults(func=run_clean)
     return parser
 
@@ -46,9 +53,12 @@ def run_summary(args: argparse.Namespace) -> int:
 
 
 def run_clean(args: argparse.Namespace) -> int:
-    """Handle `tidycsv clean`: apply the chosen steps, then save."""
-    if not args.drop_duplicates:
-        print("Error: nothing to do. Pass --drop-duplicates.", file=sys.stderr)
+    """Handle `tidycsv clean`: apply the chosen steps, then save.
+
+    Duplicates are removed first so they don't skew the mean/median/mode.
+    """
+    if not (args.drop_duplicates or args.fill_missing):
+        print("Error: nothing to do. Pass --drop-duplicates and/or --fill-missing.", file=sys.stderr)
         return EXIT_ERROR
 
     df = load_csv(args.path)
@@ -56,10 +66,32 @@ def run_clean(args: argparse.Namespace) -> int:
         rows_before = len(df)
         df = drop_duplicates(df)
         print(f"Removed {rows_before - len(df)} duplicate row(s).")
+    if args.fill_missing:
+        df = run_fill_step(df, args.fill_missing)
 
     save_csv(df, args.output)
     print(f"Wrote {len(df)} row(s) to {args.output}")
     return 0
+
+
+def run_fill_step(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
+    """Apply fill_missing() and print what it changed."""
+    rows_before = len(df)
+    missing_before = int(df.isna().sum().sum())
+    df = fill_missing(df, strategy)
+
+    if strategy == "drop":
+        print(f"Dropped {rows_before - len(df)} row(s) with missing values.")
+    else:
+        filled = missing_before - int(df.isna().sum().sum())
+        print(f"Filled {filled} missing value(s) using {strategy}.")
+
+    still_missing = df.isna().sum()
+    still_missing = still_missing[still_missing > 0]
+    if not still_missing.empty:
+        listing = ", ".join(f"{column} ({count})" for column, count in still_missing.items())
+        print(f"Not filled (non-numeric or all missing): {listing}")
+    return df
 
 
 def format_summary(summary: dict[str, Any]) -> str:
