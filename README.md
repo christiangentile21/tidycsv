@@ -13,7 +13,7 @@ Built with Python, pandas, and argparse.
 Requires Python 3.11+.
 
 ```
-git clone <this repo>
+git clone https://github.com/christiangentile21/tidycsv.git
 cd tidycsv
 python -m venv .venv
 .venv\Scripts\activate          # Windows
