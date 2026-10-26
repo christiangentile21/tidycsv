@@ -97,8 +97,7 @@ def run_fill_step(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
     still_missing = df.isna().sum()
     still_missing = still_missing[still_missing > 0]
     if not still_missing.empty:
-        listing = ", ".join(f"{column} ({count})" for column, count in still_missing.items())
-        print(f"Not filled (non-numeric or all missing): {listing}")
+        print(f"Not filled (non-numeric or all missing): {format_counts(still_missing.to_dict())}")
     return df
 
 
@@ -113,9 +112,13 @@ def run_check(args: argparse.Namespace) -> int:
     if issues["duplicate_rows"]:
         print(f"  - {issues['duplicate_rows']} duplicate row(s)")
     if issues["missing"]:
-        listing = ", ".join(f"{column} ({count})" for column, count in issues["missing"].items())
-        print(f"  - missing values in: {listing}")
+        print(f"  - missing values in: {format_counts(issues['missing'])}")
     return EXIT_ISSUES
+
+
+def format_counts(counts: dict[str, int]) -> str:
+    """Format {"age": 1, "score": 2} as "age (1), score (2)"."""
+    return ", ".join(f"{column} ({count})" for column, count in counts.items())
 
 
 def format_summary(summary: dict[str, Any]) -> str:
