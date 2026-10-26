@@ -29,10 +29,15 @@ which is useful if your system blocks newly created executables.
 ## Usage
 
 ```
-tidycsv summary FILE [--delimiter CHAR]
+tidycsv summary FILE [--delimiter CHAR] [--json]
 tidycsv clean FILE -o OUTPUT [--delimiter CHAR] [--drop-duplicates] [--fill-missing {mean,median,mode,drop}]
-tidycsv check FILE [--delimiter CHAR]
+tidycsv check FILE [--delimiter CHAR] [--json]
 ```
+
+`--json` prints the `summary` or `check` report as JSON so other tools can
+read it. Exit codes are the same as for text output. Stats that can't be
+computed (for example the mean of an entirely missing column) are `null`.
+Errors are still plain text on stderr.
 
 `--delimiter` sets the column separator (default `,`). It must be a single
 character, such as `;` or `|`; use `tab` (or `\t`) for tab-separated files.
@@ -97,6 +102,18 @@ $ tidycsv check clean.csv
 No issues found.
 ```
 
+```
+$ tidycsv check examples/sample.csv --json
+{
+  "has_issues": true,
+  "duplicate_rows": 1,
+  "missing": {
+    "age": 1,
+    "score": 1
+  }
+}
+```
+
 ## Running the tests
 
 ```
@@ -130,8 +147,6 @@ Tests use tiny synthetic CSVs written to pytest's temporary folders.
 
 1. Outlier flagging in `summary` and `check` using the IQR rule.
 2. Column renaming in `clean` (for example `--rename old=new`).
-3. `--json` output for `summary` and `check`, so other tools can read the
-   results.
 
 ## License
 

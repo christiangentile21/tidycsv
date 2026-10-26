@@ -1,6 +1,8 @@
 """Command-line entry point for tidycsv."""
 
 import argparse
+import json
+import math
 import sys
 from typing import Any
 
@@ -30,6 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
         "summary", help="Show rows, columns, types, missing values, and numeric stats."
     )
     add_input_arguments(summary_parser)
+    add_json_argument(summary_parser)
     summary_parser.set_defaults(func=run_summary)
 
     clean_parser = subparsers.add_parser("clean", help="Write a cleaned copy of a CSV file.")
@@ -50,8 +53,16 @@ def build_parser() -> argparse.ArgumentParser:
         "check", help="Exit with code 1 if duplicates or missing values are found."
     )
     add_input_arguments(check_parser)
+    add_json_argument(check_parser)
     check_parser.set_defaults(func=run_check)
     return parser
+
+
+def add_json_argument(subparser: argparse.ArgumentParser) -> None:
+    """Add --json to a command that prints a report."""
+    subparser.add_argument(
+        "--json", action="store_true", help="Print the report as JSON instead of text."
+    )
 
 
 def add_input_arguments(subparser: argparse.ArgumentParser) -> None:
@@ -78,8 +89,8 @@ def parse_delimiter(value: str) -> str:
 
 def run_summary(args: argparse.Namespace) -> int:
     """Handle `tidycsv summary`."""
-    df = load_csv(args.path, args.delimiter)
-    print(format_summary(summarize(df)))
+    summary = summarize(load_csv(args.path, args.delimiter))
+    print(to_json(summary) if args.json else format_summary(summary))
     return 0
 
 
@@ -132,16 +143,39 @@ def run_fill_step(df: pd.DataFrame, strategy: str) -> pd.DataFrame:
 def run_check(args: argparse.Namespace) -> int:
     """Handle `tidycsv check`: print a short report, return 0 or EXIT_ISSUES."""
     issues = find_issues(load_csv(args.path, args.delimiter))
-    if not has_issues(issues):
-        print("No issues found.")
-        return 0
+    found = has_issues(issues)
+    if args.json:
+        print(to_json({"has_issues": found, **issues}))
+    else:
+        print(format_issues(issues) if found else "No issues found.")
+    return EXIT_ISSUES if found else 0
 
-    print("Issues found:")
+
+def format_issues(issues: dict[str, Any]) -> str:
+    """Turn the dict from find_issues() into a short bulleted report."""
+    lines = ["Issues found:"]
     if issues["duplicate_rows"]:
-        print(f"  - {issues['duplicate_rows']} duplicate row(s)")
+        lines.append(f"  - {issues['duplicate_rows']} duplicate row(s)")
     if issues["missing"]:
-        print(f"  - missing values in: {format_counts(issues['missing'])}")
-    return EXIT_ISSUES
+        lines.append(f"  - missing values in: {format_counts(issues['missing'])}")
+    return "\n".join(lines)
+
+
+def to_json(data: dict[str, Any]) -> str:
+    """Format a report dict as indented JSON."""
+    return json.dumps(json_safe(data), indent=2, allow_nan=False)
+
+
+def json_safe(value: Any) -> Any:
+    """Replace NaN and infinity with None, since JSON has no such numbers.
+
+    Works through nested dicts, which is all the report dicts contain.
+    """
+    if isinstance(value, dict):
+        return {key: json_safe(item) for key, item in value.items()}
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
 
 
 def format_counts(counts: dict[str, int]) -> str:

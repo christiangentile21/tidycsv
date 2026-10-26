@@ -1,9 +1,10 @@
 import argparse
+import json
 from pathlib import Path
 
 import pytest
 
-from tidycsv.cli import main, parse_delimiter
+from tidycsv.cli import json_safe, main, parse_delimiter
 
 
 def test_summary_prints_report(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -288,3 +289,81 @@ def test_clean_keeps_input_delimiter(tmp_path: Path) -> None:
     main(["clean", str(source), "--delimiter", ";", "--drop-duplicates", "-o", str(target)])
 
     assert target.read_text(encoding="utf-8").splitlines() == ["name;age", "Ana;30"]
+
+
+def test_summary_json_output(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    path = tmp_path / "people.csv"
+    path.write_text("name,age\nAna,30\nBen,\n", encoding="utf-8")
+
+    exit_code = main(["summary", str(path), "--json"])
+
+    data = json.loads(capsys.readouterr().out)
+    assert exit_code == 0
+    assert data["rows"] == 2
+    assert data["missing"] == {"name": 0, "age": 1}
+    assert data["numeric"]["age"] == {"min": 30.0, "max": 30.0, "mean": 30.0}
+
+
+def test_summary_json_all_missing_column_gives_null(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "gaps.csv"
+    path.write_text("name,score\nAna,\nBen,\n", encoding="utf-8")
+
+    main(["summary", str(path), "--json"])
+
+    data = json.loads(capsys.readouterr().out)
+    assert data["numeric"]["score"] == {"min": None, "max": None, "mean": None}
+
+
+def test_check_json_with_issues_exits_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "bad.csv"
+    path.write_text("name,age\nAna,30\nAna,30\nBen,\n", encoding="utf-8")
+
+    exit_code = main(["check", str(path), "--json"])
+
+    data = json.loads(capsys.readouterr().out)
+    assert exit_code == 1
+    assert data == {"has_issues": True, "duplicate_rows": 1, "missing": {"age": 1}}
+
+
+def test_check_json_clean_file_exits_zero(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "good.csv"
+    path.write_text("name,age\nAna,30\n", encoding="utf-8")
+
+    exit_code = main(["check", str(path), "--json"])
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out) == {
+        "has_issues": False,
+        "duplicate_rows": 0,
+        "missing": {},
+    }
+
+
+def test_json_error_still_goes_to_stderr(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    exit_code = main(["check", str(tmp_path / "nope.csv"), "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "File not found" in captured.err
+
+
+def test_json_not_available_on_clean() -> None:
+    with pytest.raises(SystemExit) as info:
+        main(["clean", "in.csv", "--drop-duplicates", "-o", "out.csv", "--json"])
+
+    assert info.value.code == 2
+
+
+def test_json_safe_replaces_non_finite_numbers() -> None:
+    data = {"a": float("nan"), "b": {"c": float("inf"), "d": -float("inf")}, "e": 1.5, "f": "x"}
+
+    assert json_safe(data) == {"a": None, "b": {"c": None, "d": None}, "e": 1.5, "f": "x"}
